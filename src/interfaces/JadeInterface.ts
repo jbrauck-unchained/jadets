@@ -84,20 +84,19 @@ export class JadeInterface implements IJadeInterface {
     long_timeout: boolean
   ): Promise<RPCResponse> {
     const chunks: RPCResponse[] = [initialResponse];
-    let last = initialResponse;
+    const seqlen = initialResponse.seqlen!;
 
-    console.log(`Receiving extended data: chunk ${last.seqnum}/${last.seqlen}`);
+    console.log(`Receiving extended data: chunk ${initialResponse.seqnum}/${seqlen}`);
 
-    while (this.isExtendedDataResponse(last)) {
-      const nextSeqnum = last.seqnum! + 1;
+    for (let seqnum = initialResponse.seqnum! + 1; seqnum <= seqlen; seqnum++) {
       const extendedRequest = this.buildRequest(
         Math.floor(Math.random() * 1000000).toString(),
         'get_extended_data',
         {
           origid: originalRequest.id,
           orig: originalRequest.method,
-          seqnum: nextSeqnum,
-          seqlen: last.seqlen,
+          seqnum,
+          seqlen,
         }
       );
 
@@ -107,16 +106,15 @@ export class JadeInterface implements IJadeInterface {
       if (chunkResponse.error) {
         return chunkResponse;
       }
-      if (chunkResponse.seqnum !== nextSeqnum) {
-        throw new Error(`Expected chunk ${nextSeqnum}, got ${chunkResponse.seqnum}`);
+      if (chunkResponse.seqnum !== seqnum) {
+        throw new Error(`Expected chunk ${seqnum}, got ${chunkResponse.seqnum}`);
       }
-      if (chunkResponse.seqlen !== last.seqlen) {
-        throw new Error(`Inconsistent seqlen: expected ${last.seqlen}, got ${chunkResponse.seqlen}`);
+      if (chunkResponse.seqlen !== seqlen) {
+        throw new Error(`Inconsistent seqlen: expected ${seqlen}, got ${chunkResponse.seqlen}`);
       }
 
       chunks.push(chunkResponse);
-      last = chunkResponse;
-      console.log(`Received extended data chunk: ${last.seqnum}/${last.seqlen}`);
+      console.log(`Received extended data chunk: ${seqnum}/${seqlen}`);
     }
 
     return this.reassembleExtendedData(chunks);

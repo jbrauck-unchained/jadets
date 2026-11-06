@@ -66,6 +66,53 @@ describe('JadeInterface extended data', () => {
     assert.deepEqual(Array.from(reply.result), [1, 2, 3, 4])
   })
 
+  it('fetches every fragment of a 3-chunk sign_psbt reply', async () => {
+    class ThreeChunkTransport extends MockTransport {
+      protected replyTo(msg: RPCRequest): void {
+        const seqnum = msg.method === 'sign_psbt' ? 1 : msg.params.seqnum
+        this.emit('message', {
+          id: msg.id,
+          seqnum,
+          seqlen: 3,
+          result: new Uint8Array([seqnum]),
+        })
+      }
+    }
+
+    const transport = new ThreeChunkTransport()
+    const iface = new JadeInterface(transport)
+    const reply = await iface.makeRPCCall(
+      { id: 'orig', method: 'sign_psbt', params: {} },
+      true
+    )
+
+    assert.deepEqual(
+      transport.sent.slice(1).map((m) => m.params.seqnum),
+      [2, 3]
+    )
+    assert.deepEqual(Array.from(reply.result), [1, 2, 3])
+  })
+
+  it('returns a device error instead of a chunk mismatch', async () => {
+    class RejectingTransport extends MockTransport {
+      protected replyTo(msg: RPCRequest): void {
+        if (msg.method === 'sign_psbt') {
+          this.emit('message', { id: msg.id, seqnum: 1, seqlen: 3, result: new Uint8Array([1]) })
+          return
+        }
+        this.emit('message', { id: msg.id, error: { code: -32001, message: 'Mismatched fields' } })
+      }
+    }
+
+    const iface = new JadeInterface(new RejectingTransport())
+    const reply = await iface.makeRPCCall(
+      { id: 'orig', method: 'sign_psbt', params: {} },
+      true
+    )
+
+    assert.equal(reply.error?.message, 'Mismatched fields')
+  })
+
   it('does not request extra fragments when seqnum equals seqlen', async () => {
     class OneChunkTransport extends MockTransport {
       protected replyTo(msg: RPCRequest): void {

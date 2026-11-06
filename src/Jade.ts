@@ -5,6 +5,12 @@ import { getFingerprintFromXpub } from './utils'
 
 import { randomBytes } from 'crypto';
 
+type RpcOptions = {
+	id?: string;
+	long_timeout?: boolean;
+	http_request_fn?: JadeHttpRequestFunction;
+};
+
 export class Jade implements IJade {
 
 	constructor(private iface: IJadeInterface) {}
@@ -16,10 +22,9 @@ export class Jade implements IJade {
 	private async _jadeRpc(
 		method: string,
 		params?: any,
-		id?: string,
-		long_timeout: boolean = false,
-		http_request_fn?: JadeHttpRequestFunction 
+		opts: RpcOptions = {}
 	): Promise<any> {
+		const { id, long_timeout = false, http_request_fn } = opts;
 		const requestId = id || Math.floor(Math.random() * 1000000).toString();
 		const request = this.iface.buildRequest(requestId, method, params);
 		const reply = await this.iface.makeRPCCall(request, long_timeout);
@@ -40,9 +45,7 @@ export class Jade implements IJade {
 			return this._jadeRpc(
 				httpRequest['on-reply'],
 				httpResponse['body'],
-				undefined,
-				long_timeout,
-				http_request_fn
+				{ long_timeout, http_request_fn }
 			);
 		}
 
@@ -86,7 +89,7 @@ export class Jade implements IJade {
 			network,
 			epoch: computedEpoch
 		};
-		return this._jadeRpc('auth_user', params, undefined, true, http_request_fn);
+		return this._jadeRpc('auth_user', params, { long_timeout: true, http_request_fn });
 	}
 
 	async addEntropy(entropy: Uint8Array): Promise<boolean> {
@@ -125,7 +128,7 @@ export class Jade implements IJade {
 			multisig_name: mname,
 			descriptor,
 		};
-		return this._jadeRpc('register_multisig', params, undefined, true);
+		return this._jadeRpc('register_multisig', params, { long_timeout: true });
 	}
 
 	async getRegisteredMultisigs(): Promise<Record<string, MultisigSummary>> {
@@ -204,7 +207,7 @@ export class Jade implements IJade {
 		if (opts.csvBlocks)      params.csv_blocks = opts.csvBlocks;
 		if (opts.confidential)   params.confidential = opts.confidential;
 
-		return this._jadeRpc("get_receive_address", params, undefined, true);
+		return this._jadeRpc("get_receive_address", params, { long_timeout: true });
 	}
 
 	async signMessage(
@@ -218,14 +221,14 @@ export class Jade implements IJade {
 				throw new Error('ae sig not implemented');
 		} else {
 			const params = {'path': path, 'message': message }
-			return this._jadeRpc('sign_message', params, undefined, true);
+			return this._jadeRpc('sign_message', params, { long_timeout: true });
 		}
 
 	}
 
 	async signPSBT(network: string, psbt: Uint8Array): Promise<Uint8Array> {
 		const params = {'network': network, 'psbt': psbt};
-		return this._jadeRpc('sign_psbt', params, undefined, true);
+		return this._jadeRpc('sign_psbt', params, { long_timeout: true });
 	}
 
 	async getMasterFingerPrint(network: string): Promise<null | string>{
